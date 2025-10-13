@@ -212,34 +212,35 @@ if st.session_state.processed_profiles:
             st.markdown(f"<p style='margin:0; font-size: 0.95em;'>&nbsp;&nbsp;• ROR: {ror_str}</p>", unsafe_allow_html=True)
             st.markdown(f"<p style='margin-bottom:0.8em; font-size: 0.95em;'>&nbsp;&nbsp;• 팬: {fan_str}</p>", unsafe_allow_html=True)
 
-     with st.expander("🕒 포인트별 분석 보기"):
-        selected_profiles_data = st.session_state.get('selected_profiles', [])
-        for name in selected_profiles_data:
-            st.subheader(f"{name} 포인트별 분석")
-            temp_df = st.session_state.processed_profiles.get(name)
-            fan_df = st.session_state.processed_fan_profiles.get(name)
-            if temp_df is not None and fan_df is not None:
-                st.write("**온도 포인트**")
-                temp_analysis_df = temp_df.dropna(subset=['온도']).copy()
-                if not temp_analysis_df.empty and not fan_df.dropna(subset=['Fan (%)']).empty and len(fan_df.dropna(subset=['Fan (%)'])) > 1:
-                    temp_analysis_df['Fan (%)'] = np.interp(temp_analysis_df['누적 시간 (초)'], fan_df['누적 시간 (초)'].dropna(), fan_df['Fan (%)'].dropna()).round(1)
-                
-                temp_cols_order = ['온도', 'Fan (%)', '분', '초', '구간 시간 (초)', '누적 시간 (초)', 'ROR (℃/sec)']
-                
-                # col1, col2로 공간을 나누고 col1 안에 테이블 배치
-                col1, col2 = st.columns([0.8, 0.2])
-                with col1:
-                    st.data_editor(temp_analysis_df, column_order=temp_cols_order, hide_index=True, disabled=True, use_container_width=True, key=f"temp_analysis_table_{name}")
+# --- 이 부분이 수정된 부분 ---
+with st.expander("🕒 포인트별 분석 보기"):
+    selected_profiles_data = st.session_state.get('selected_profiles', [])
+    for name in selected_profiles_data:
+        st.subheader(f"{name} 포인트별 분석")
+        temp_df = st.session_state.processed_profiles.get(name)
+        fan_df = st.session_state.processed_fan_profiles.get(name)
+        if temp_df is not None and fan_df is not None:
+            st.write("**온도 포인트**")
+            temp_analysis_df = temp_df.dropna(subset=['온도']).copy()
+            if not temp_analysis_df.empty and not fan_df.dropna(subset=['Fan (%)']).empty and len(fan_df.dropna(subset=['Fan (%)'])) > 1:
+                temp_analysis_df['Fan (%)'] = np.interp(temp_analysis_df['누적 시간 (초)'], fan_df['누적 시간 (초)'].dropna(), fan_df['Fan (%)'].dropna()).round(1)
+            
+            temp_cols_order = ['온도', 'Fan (%)', '분', '초', '구간 시간 (초)', '누적 시간 (초)', 'ROR (℃/sec)']
+            # column_config에서 Point를 None으로 설정하여 숨김
+            temp_analysis_config = { "Point": None }
+            col1, col2 = st.columns([0.8, 0.2])
+            with col1:
+                st.data_editor(temp_analysis_df, column_order=temp_cols_order, column_config=temp_analysis_config, hide_index=True, disabled=True, use_container_width=True, key=f"temp_analysis_table_{name}")
 
-                st.write("**팬 포인트**")
-                fan_analysis_df = fan_df.dropna(subset=['Fan (%)']).copy()
-                if not fan_analysis_df.empty and not temp_df.dropna(subset=['온도']).empty and len(temp_df.dropna(subset=['온도'])) > 1:
-                    fan_analysis_df['온도'] = np.interp(fan_analysis_df['누적 시간 (초)'], temp_df['누적 시간 (초)'].dropna(), temp_df['온도'].dropna()).round(1)
-                    fan_analysis_df['ROR (℃/sec)'] = np.interp(fan_analysis_df['누적 시간 (초)'], temp_df['누적 시간 (초)'].dropna(), temp_df['ROR (℃/sec)'].dropna()).round(3)
-                
-                fan_cols_order = ['온도', 'Fan (%)', '분', '초', '구간 시간 (초)', '누적 시간 (초)', 'ROR (℃/sec)']
-                
-                # 팬 테이블도 동일하게 적용
-                col3, col4 = st.columns([0.8, 0.2])
-                with col3:
-                    st.data_editor(fan_analysis_df, column_order=fan_cols_order, hide_index=True, disabled=True, use_container_width=True, key=f"fan_analysis_table_{name}")
+            st.write("**팬 포인트**")
+            fan_analysis_df = fan_df.dropna(subset=['Fan (%)']).copy()
+            if not fan_analysis_df.empty and not temp_df.dropna(subset=['온도']).empty and len(temp_df.dropna(subset=['온도'])) > 1:
+                fan_analysis_df['온도'] = np.interp(fan_analysis_df['누적 시간 (초)'], temp_df['누적 시간 (초)'].dropna(), temp_df['온도'].dropna()).round(1)
+                fan_analysis_df['ROR (℃/sec)'] = np.interp(fan_analysis_df['누적 시간 (초)'], temp_df['누적 시간 (초)'].dropna(), temp_df['ROR (℃/sec)'].dropna()).round(3)
+            
+            fan_cols_order = ['온도', 'Fan (%)', '분', '초', '구간 시간 (초)', '누적 시간 (초)', 'ROR (℃/sec)']
+            # column_config에서 Point를 None으로 설정하여 숨김
+            fan_analysis_config = { "Point": None }
+            col3, col4 = st.columns([0.8, 0.2])
+            with col3:
+                st.data_editor(fan_analysis_df, column_order=fan_cols_order, column_config=fan_analysis_config, hide_index=True, disabled=True, use_container_width=True, key=f"fan_analysis_table_{name}")
