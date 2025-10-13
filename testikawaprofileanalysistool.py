@@ -12,9 +12,14 @@ def create_new_profile():
     return df
 
 def sync_profile_data(df, primary_input_mode):
+    # 'Point' 열을 실제 행 순서에 맞게 재설정
+    df = df.reset_index(drop=True)
+    df['Point'] = df.index
+
     if df['온도'].isnull().all(): return df
     last_valid_index = df['온도'].last_valid_index()
     if last_valid_index is None: return df
+    
     calc_df = df.loc[0:last_valid_index].copy()
     if primary_input_mode == '시간 입력':
         calc_df['누적 시간 (초)'] = calc_df['분'].fillna(0) * 60 + calc_df['초'].fillna(0)
@@ -24,6 +29,7 @@ def sync_profile_data(df, primary_input_mode):
         calc_df['누적 시간 (초)'] = np.concatenate(([0], cumulative_seconds[:-1].values))
         calc_df['분'] = (calc_df['누적 시간 (초)'] // 60).astype(int)
         calc_df['초'] = (calc_df['누적 시간 (초)'] % 60).astype(int)
+    
     delta_temp = calc_df['온도'].diff()
     delta_time = calc_df['누적 시간 (초)'].diff()
     ror = (delta_temp / delta_time).replace([np.inf, -np.inf], 0).fillna(0)
@@ -124,7 +130,8 @@ for i, col in enumerate(cols):
             text_area_content = st.text_area("엑셀 데이터 붙여넣기", height=250, placeholder=placeholder, key=f"textarea_{current_name}", label_visibility="collapsed")
         else:
             df_editor_key = f"editor_{main_input_method}_{current_name}"
-            edited_df = st.data_editor(st.session_state.profiles[current_name], column_config=column_config, key=df_editor_key, hide_index=True, num_rows="fixed", column_order=default_visible_cols)
+            # --- 여기가 수정된 부분: num_rows를 "dynamic"으로 변경 ---
+            edited_df = st.data_editor(st.session_state.profiles[current_name], column_config=column_config, key=df_editor_key, hide_index=True, num_rows="dynamic", column_order=default_visible_cols)
         
         st.write("")
         if st.button("🔄 데이터 입력/동기화", key=f"sync_button_{current_name}"):
@@ -136,6 +143,7 @@ for i, col in enumerate(cols):
                 synced_df = sync_profile_data(profile_df_to_sync, main_input_method); st.session_state.profiles[current_name] = synced_df; st.session_state.graph_button_enabled = True; st.rerun()
 st.divider()
 
+# (그래프 및 분석 패널 UI 변경 없음)
 st.header("📈 그래프 및 분석")
 if st.button("📊 그래프 업데이트", disabled=not st.session_state.graph_button_enabled):
     st.session_state.processed_profiles = {name: calculate_ror(df.copy()) for name, df in st.session_state.profiles.items()}
@@ -153,18 +161,14 @@ if st.session_state.processed_profiles:
             valid_df = df.dropna(subset=['누적 시간 (초)', '온도'])
             if len(valid_df) > 1:
                 fig.add_trace(go.Scatter(x=valid_df['누적 시간 (초)'], y=valid_df['온도'], mode='lines+markers', name=name, yaxis='y1'))
-                
-                # --- 여기가 수정된 부분: 0초 데이터를 제외하고 ROR 그래프를 그림 ---
                 ror_df = valid_df.iloc[1:]
                 fig.add_trace(go.Scatter(x=ror_df['누적 시간 (초)'], y=ror_df['ROR (℃/sec)'], mode='lines', name=f'{name} ROR', yaxis='y2', line=dict(dash='dot')))
-        
         selected_time_int = int(st.session_state.get('selected_time', 0))
         fig.add_vline(x=selected_time_int, line_width=1, line_dash="dash", line_color="grey")
         fig.update_layout(height=900, xaxis_title='시간 (초)', yaxis_title='온도 (°C)', yaxis=dict(range=[85, 235]), yaxis2=dict(title='ROR (℃/sec)', overlaying='y', side='right', range=[0, 0.75]), xaxis=dict(range=[0, 360]), legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
         st.plotly_chart(fig, use_container_width=True)
 
     with analysis_col:
-        # (분석 패널 UI 변경 없음)
         st.subheader("🔍 분석 정보"); st.markdown("---")
         st.write("**총 로스팅 시간**")
         for name, df in st.session_state.processed_profiles.items():
