@@ -215,7 +215,7 @@ if st.session_state.processed_profiles:
     with st.expander("🕒 통합 분석 테이블 보기"):
         selected_profiles_data = st.session_state.get('selected_profiles', [])
         for name in selected_profiles_data:
-            st.subheader(f"{name} 기준 분석")
+            st.subheader(f"{name} 포인트별 분석")
             temp_df = st.session_state.processed_profiles.get(name)
             fan_df = st.session_state.processed_fan_profiles.get(name)
 
