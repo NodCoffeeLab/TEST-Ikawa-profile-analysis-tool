@@ -226,15 +226,24 @@ with st.expander("🕒 포인트별 분석 보기"):
                 temp_analysis_df = temp_df.dropna(subset=['온도']).copy()
                 if not temp_analysis_df.empty and not fan_df.dropna(subset=['Fan (%)']).empty and len(fan_df.dropna(subset=['Fan (%)'])) > 1:
                     temp_analysis_df['Fan (%)'] = np.interp(temp_analysis_df['누적 시간 (초)'], fan_df['누적 시간 (초)'].dropna(), fan_df['Fan (%)'].dropna()).round(1)
-                temp_cols_order = ['온도', 'Fan (%)', '분', '초', '구간 시간 (초)', '누적 시간 (초)', 'ROR (℃/sec)']
-                st.data_editor(temp_analysis_df, column_order=temp_cols_order, hide_index=True, disabled=True, use_container_width=True, key=f"temp_analysis_table_{name}")
+                  temp_cols_order = ['온도', 'Fan (%)', '분', '초', '구간 시간 (초)', '누적 시간 (초)', 'ROR (℃/sec)']
+            # column_config에서 Point를 None으로 설정하여 숨김
+            temp_analysis_config = { "Point": None }
+            col1, col2 = st.columns([0.8, 0.2])
+            with col1:
+                st.data_editor(temp_analysis_df, column_order=temp_cols_order, column_config=temp_analysis_config, hide_index=True, disabled=True, use_container_width=True, key=f"temp_analysis_table_{name}")
 
                 st.write("**팬 포인트**")
                 fan_analysis_df = fan_df.dropna(subset=['Fan (%)']).copy()
                 if not fan_analysis_df.empty and not temp_df.dropna(subset=['온도']).empty and len(temp_df.dropna(subset=['온도'])) > 1:
                     fan_analysis_df['온도'] = np.interp(fan_analysis_df['누적 시간 (초)'], temp_df['누적 시간 (초)'].dropna(), temp_df['온도'].dropna()).round(1)
                     fan_analysis_df['ROR (℃/sec)'] = np.interp(fan_analysis_df['누적 시간 (초)'], temp_df['누적 시간 (초)'].dropna(), temp_df['ROR (℃/sec)'].dropna()).round(3)
-                fan_cols_order = ['온도', 'Fan (%)', '분', '초', '구간 시간 (초)', '누적 시간 (초)', 'ROR (℃/sec)']
-                st.data_editor(fan_analysis_df, column_order=fan_cols_order, hide_index=True, disabled=True, use_container_width=True, key=f"fan_analysis_table_{name}")
+                    fan_cols_order = ['온도', 'Fan (%)', '분', '초', '구간 시간 (초)', '누적 시간 (초)', 'ROR (℃/sec)']
+                    # column_config에서 Point를 None으로 설정하여 숨김
+                    fan_analysis_config = { "Point": None }
+                    col3, col4 = st.columns([0.8, 0.2])
+                    with col3:
+                        st.data_editor(fan_analysis_df, column_order=fan_cols_order, column_config=fan_analysis_config, hide_index=True, disabled=True, use_container_width=True, key=f"fan_analysis_table_{name}")
+                
     else:
         st.info("먼저 데이터를 입력하고 '그래프 업데이트' 버튼을 눌러주세요.")
