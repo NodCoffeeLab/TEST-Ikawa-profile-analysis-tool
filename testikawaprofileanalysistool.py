@@ -52,10 +52,30 @@ def sync_fan_data(df, primary_input_mode):
     return df
 
 def parse_excel_data(text_data, mode):
-    # (이전과 동일)
-    return pd.DataFrame()
+    new_data = []; lines = text_data.strip().split('\n')
+    for i, line in enumerate(lines):
+        if not line.strip(): continue
+        parts = line.strip().split(); row = {'Point': i}
+        try:
+            if mode == '시간 입력':
+                if len(parts) >= 3: row['온도'], row['분'], row['초'] = float(parts[0]), int(parts[1]), int(parts[2])
+                elif len(parts) >= 1: row['온도'], row['분'], row['초'] = float(parts[0]), 0, 0
+            elif mode == '구간 입력':
+                if len(parts) >= 2: row['온도'], row['구간 시간 (초)'] = float(parts[0]), int(parts[1])
+                elif len(parts) >= 1: row['온도'], row['구간 시간 (초)'] = float(parts[0]), np.nan
+            new_data.append(row)
+        except (ValueError, IndexError): continue
+    if not new_data: return pd.DataFrame()
+    return pd.DataFrame(new_data).set_index('Point')
+
 def calculate_ror(df):
-    # (이전과 동일)
+    if df['온도'].isnull().all(): return df
+    last_valid_index = df['온도'].last_valid_index()
+    if last_valid_index is None: return df
+    calc_df = df.loc[0:last_valid_index].copy()
+    delta_temp = calc_df['온도'].diff(); delta_time = calc_df['누적 시간 (초)'].diff()
+    ror = (delta_temp / delta_time).replace([np.inf, -np.inf], 0).fillna(0)
+    calc_df['ROR (℃/sec)'] = ror; df.update(calc_df)
     return df
 
 # --- UI 및 앱 실행 로직 ---
@@ -151,35 +171,68 @@ if st.session_state.processed_profiles:
     max_time = max(max_time_temp, max_time_fan, 1)
 
     with graph_col:
-        fig = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.7, 0.3], vertical_spacing=0.05)
-        selected_profiles_data = st.session_state.get('selected_profiles', [])
+        fig = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.7, 0.3], vertical_spacing=0.05,
+                            specs=[[{"secondary_y": True}], [{"secondary_y": False}]])
         
+        selected_profiles_data = st.session_state.get('selected_profiles', [])
+        colors = st.get_option("theme.backgroundColor") # Plotly의 기본 색상 순서
+        
+        color_map = {name: colors[i % len(colors)] for i, name in enumerate(profile_names)}
+
         for name in selected_profiles_data:
             df = st.session_state.processed_profiles.get(name)
+            color = color_map.get(name)
             if df is not None:
                 valid_df = df.dropna(subset=['누적 시간 (초)', '온도']);
                 if len(valid_df) > 1:
-                    fig.add_trace(go.Scatter(x=valid_df['누적 시간 (초)'], y=valid_df['온도'], mode='lines+markers', name=name), row=1, col=1)
+                    fig.add_trace(go.Scatter(x=valid_df['누적 시간 (초)'], y=valid_df['온도'], mode='lines+markers', name=name, line=dict(color=color)), row=1, col=1)
                     ror_df = valid_df.iloc[1:]
-                    fig.add_trace(go.Scatter(x=ror_df['누적 시간 (초)'], y=ror_df['ROR (℃/sec)'], mode='lines', name=f'{name} ROR', line=dict(dash='dot'), yaxis='y2'), row=1, col=1)
+                    fig.add_trace(go.Scatter(x=ror_df['누적 시간 (초)'], y=ror_df['ROR (℃/sec)'], mode='lines', name=f'{name} ROR', line=dict(color=color, dash='dot')), secondary_y=True, row=1, col=1)
+            
             fan_df = st.session_state.processed_fan_profiles.get(name)
             if fan_df is not None:
                 valid_fan_df = fan_df.dropna(subset=['누적 시간 (초)', 'Fan (%)'])
                 if len(valid_fan_df) > 1:
-                    fig.add_trace(go.Scatter(x=valid_fan_df['누적 시간 (초)'], y=valid_fan_df['Fan (%)'], mode='lines+markers', name=f'{name} Fan', line=dict(dash='solid')), row=2, col=1)
+                    fig.add_trace(go.Scatter(x=valid_fan_df['누적 시간 (초)'], y=valid_fan_df['Fan (%)'], mode='lines+markers', name=f'{name} Fan', line=dict(color=color, dash='solid')), row=2, col=1)
         
         selected_time_int = int(st.session_state.get('selected_time', 0))
         fig.add_vline(x=selected_time_int, line_width=1, line_dash="dash", line_color="grey")
         
         axis_ranges = st.session_state.get('axis_ranges', {'x': [0, 360], 'y': [85, 235], 'y2': [0, 0.75]})
         fig.update_layout(height=900, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
-        fig.update_xaxes(range=axis_ranges['x'], title_text=None, showticklabels=True, row=1, col=1)
+        fig.update_xaxes(range=axis_ranges['x'], title_text=None, showticklabels=False, row=1, col=1)
         fig.update_xaxes(range=axis_ranges['x'], title_text='시간 (초)', row=2, col=1)
-        fig.update_yaxes(title_text="온도 (°C)", range=axis_ranges['y'], row=1, col=1)
-        fig.update_yaxes(title_text="ROR (℃/sec)", range=axis_ranges['y2'], side='right', overlaying='y', secondary_y=True, row=1, col=1)
+        fig.update_yaxes(title_text="온도 (°C)", range=axis_ranges['y'], row=1, col=1, secondary_y=False)
+        fig.update_yaxes(title_text="ROR (℃/sec)", range=axis_ranges['y2'], row=1, col=1, secondary_y=True)
         fig.update_yaxes(title_text="팬 (%)", range=[60, 100], row=2, col=1)
         st.plotly_chart(fig, use_container_width=True)
 
     with analysis_col:
         st.subheader("🔍 분석 정보"); st.markdown("---")
-        # (이하 분석 패널 코드 생략)
+        st.write("**총 로스팅 시간**")
+        for name, df in st.session_state.processed_profiles.items():
+            valid_df = df.dropna(subset=['누적 시간 (초)'])
+            if not valid_df.empty:
+                total_time = valid_df['누적 시간 (초)'].max()
+                time_str = f"{int(total_time // 60)}분 {int(total_time % 60)}초"
+                st.markdown(f"**{name}**: <span style='font-size: 1.1em;'>{time_str}</span>", unsafe_allow_html=True)
+        st.markdown("---")
+        def update_slider_time():
+            st.session_state.selected_time = st.session_state.time_slider
+        st.slider("시간 선택 (초)", 0, int(max_time), st.session_state.selected_time, 1, key="time_slider", on_change=update_slider_time)
+        st.write(""); st.write("**선택된 시간 상세 정보**")
+        selected_time = st.session_state.selected_time
+        st.markdown(f"#### {int(selected_time // 60)}분 {int(selected_time % 60):02d}초 ({selected_time}초)")
+        for name, df in st.session_state.processed_profiles.items():
+            valid_df = df.dropna(subset=['누적 시간 (초)', '온도', 'ROR (℃/sec)'])
+            if len(valid_df) > 1:
+                profile_max_time = valid_df['누적 시간 (초)'].max()
+                st.markdown(f"**{name}**")
+                if selected_time > profile_max_time:
+                    temp_str, ror_str = "--", "--"
+                else:
+                    hover_temp = np.interp(selected_time, valid_df['누적 시간 (초)'], valid_df['온도'])
+                    hover_ror = np.interp(selected_time, valid_df['누적 시간 (초)'], valid_df['ROR (℃/sec)'])
+                    temp_str, ror_str = f"{hover_temp:.1f}℃", f"{hover_ror:.3f}℃/sec"
+                st.markdown(f"<p style='margin-bottom:0; margin-top:0.5em; font-size: 0.95em;'>&nbsp;&nbsp;• 온도: {temp_str}</p>", unsafe_allow_html=True)
+                st.markdown(f"<p style='margin-bottom:0.8em; margin-top:0; font-size: 0.95em;'>&nbsp;&nbsp;• ROR: {ror_str}</p>", unsafe_allow_html=True)
