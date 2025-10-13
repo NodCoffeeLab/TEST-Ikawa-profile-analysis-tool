@@ -221,14 +221,14 @@ if st.session_state.processed_profiles:
 
             if temp_df is not None and fan_df is not None:
                 # 온도 기준 테이블
-                st.write("**온도 포인트 기준**")
+                st.write("**온도 포인트**")
                 temp_analysis_df = temp_df.dropna(subset=['온도']).copy()
                 if not temp_analysis_df.empty and not fan_df.dropna(subset=['Fan (%)']).empty and len(fan_df.dropna(subset=['Fan (%)'])) > 1:
                     temp_analysis_df['Fan (%)'] = np.interp(temp_analysis_df['누적 시간 (초)'], fan_df['누적 시간 (초)'].dropna(), fan_df['Fan (%)'].dropna()).round(1)
                 st.dataframe(temp_analysis_df, use_container_width=True)
 
                 # 팬 기준 테이블
-                st.write("**팬 포인트 기준**")
+                st.write("**팬 포인트**")
                 fan_analysis_df = fan_df.dropna(subset=['Fan (%)']).copy()
                 if not fan_analysis_df.empty and not temp_df.dropna(subset=['온도']).empty and len(temp_df.dropna(subset=['온도'])) > 1:
                     fan_analysis_df['온도'] = np.interp(fan_analysis_df['누적 시간 (초)'], temp_df['누적 시간 (초)'].dropna(), temp_df['온도'].dropna()).round(1)
