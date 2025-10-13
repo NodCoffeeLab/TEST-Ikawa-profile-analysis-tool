@@ -239,7 +239,7 @@ with st.expander("🕒 포인트별 분석 보기"):
                 if not temp_analysis_df.empty and not fan_df.dropna(subset=['Fan (%)']).empty and len(fan_df.dropna(subset=['Fan (%)'])) > 1:
                     temp_analysis_df['Fan (%)'] = np.interp(temp_analysis_df['누적 시간 (초)'], fan_df['누적 시간 (초)'].dropna(), fan_df['Fan (%)'].dropna()).round(1)
                 temp_cols_order = ['온도', 'Fan (%)', '분', '초', '구간 시간 (초)', '누적 시간 (초)', 'ROR (℃/sec)']
-                col1, col2 = st.columns([0.6, 0.4])
+                col1, col2 = st.columns([0.65, 0.35])
                 with col1:
                     st.data_editor(temp_analysis_df, column_order=temp_cols_order, hide_index=True, disabled=True, use_container_width=True, key=f"temp_analysis_table_{name}")
 
@@ -249,7 +249,7 @@ with st.expander("🕒 포인트별 분석 보기"):
                     fan_analysis_df['온도'] = np.interp(fan_analysis_df['누적 시간 (초)'], temp_df['누적 시간 (초)'].dropna(), temp_df['온도'].dropna()).round(1)
                     fan_analysis_df['ROR (℃/sec)'] = np.interp(fan_analysis_df['누적 시간 (초)'], temp_df['누적 시간 (초)'].dropna(), temp_df['ROR (℃/sec)'].dropna()).round(3)
                 fan_cols_order = ['온도', 'Fan (%)', '분', '초', '구간 시간 (초)', '누적 시간 (초)', 'ROR (℃/sec)']
-                col3, col4 = st.columns([0.6, 0.4])
+                col3, col4 = st.columns([0.65, 0.35])
                 with col3:
                     st.data_editor(fan_analysis_df, column_order=fan_cols_order, hide_index=True, disabled=True, use_container_width=True, key=f"fan_analysis_table_{name}")
     else:
