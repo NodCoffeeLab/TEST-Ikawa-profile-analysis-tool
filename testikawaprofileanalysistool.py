@@ -103,7 +103,6 @@ cols = st.columns(len(profile_names))
 for i, col in enumerate(cols):
     current_name = profile_names[i]
     with col:
-        # (이하 데이터 입력 UI 코드는 이전과 동일)
         col1, col2 = st.columns([0.8, 0.2]);
         with col1: new_name = st.text_input("프로파일 이름", value=current_name, key=f"name_input_{current_name}", label_visibility="collapsed")
         with col2:
@@ -123,8 +122,8 @@ for i, col in enumerate(cols):
         st.subheader("온도 데이터 입력")
         if main_input_method == "구간 입력":
              st.info("구간(초): 현재 포인트에서 다음 포인트까지 걸릴 시간")
-        column_config = { "Point": st.column_config.NumberColumn("번호", disabled=True), "온도": st.column_config.NumberColumn("온도℃", format="%.1f"), "분": st.column_config.NumberColumn("분"), "초": st.column_config.NumberColumn("초"), "구간 시간 (초)": st.column_config.NumberColumn("구간(초)"), "누적 시간 (초)": st.column_config.NumberColumn("누적 시간(초)", disabled=True), "ROR (℃/sec)": st.column_config.NumberColumn("ROR", format="%.3f", disabled=True)}
-        default_visible_cols = ["Point", "온도"]
+        column_config = { "Point": None, "온도": st.column_config.NumberColumn("온도℃", format="%.1f"), "분": st.column_config.NumberColumn("분"), "초": st.column_config.NumberColumn("초"), "구간 시간 (초)": st.column_config.NumberColumn("구간(초)"), "누적 시간 (초)": st.column_config.NumberColumn("누적 시간(초)", disabled=True), "ROR (℃/sec)": st.column_config.NumberColumn("ROR", format="%.3f", disabled=True)}
+        default_visible_cols = ["온도"]
         if main_input_method == "시간 입력": default_visible_cols += ["분", "초"]
         else: default_visible_cols += ["구간 시간 (초)"]
         edited_df = st.data_editor(st.session_state.profiles[current_name], column_config=column_config, key=f"editor_{main_input_method}_{current_name}", hide_index=True, num_rows="dynamic", column_order=default_visible_cols)
@@ -132,8 +131,8 @@ for i, col in enumerate(cols):
             synced_df = sync_profile_data(edited_df, main_input_method); st.session_state.profiles[current_name] = synced_df; st.session_state.graph_button_enabled = True; st.rerun()
         with st.expander("팬 데이터 입력 (선택 사항)"):
             fan_df = st.session_state.fan_profiles.get(current_name, create_new_fan_profile())
-            fan_column_config = {"Point": st.column_config.NumberColumn("번호", disabled=True), "Fan (%)": st.column_config.NumberColumn("팬(%)", min_value=0, max_value=100), "분": st.column_config.NumberColumn("분"), "초": st.column_config.NumberColumn("초"), "구간 시간 (초)": st.column_config.NumberColumn("구간(초)"), "누적 시간 (초)": st.column_config.NumberColumn("누적(초)", disabled=True)}
-            fan_visible_cols = ["Point", "Fan (%)"]
+            fan_column_config = {"Point": None, "Fan (%)": st.column_config.NumberColumn("팬(%)", min_value=0, max_value=100), "분": st.column_config.NumberColumn("분"), "초": st.column_config.NumberColumn("초"), "구간 시간 (초)": st.column_config.NumberColumn("구간(초)"), "누적 시간 (초)": st.column_config.NumberColumn("누적(초)", disabled=True)}
+            fan_visible_cols = ["Fan (%)"]
             if main_input_method == "시간 입력": fan_visible_cols += ["분", "초"]
             else: fan_visible_cols += ["구간 시간 (초)"]
             fan_edited_df = st.data_editor(fan_df, column_config=fan_column_config, column_order=fan_visible_cols, num_rows="dynamic", key=f"fan_editor_{current_name}", hide_index=True)
@@ -224,15 +223,13 @@ if st.session_state.processed_profiles:
                 temp_analysis_df = temp_df.dropna(subset=['온도']).copy()
                 if not temp_analysis_df.empty and not fan_df.dropna(subset=['Fan (%)']).empty and len(fan_df.dropna(subset=['Fan (%)'])) > 1:
                     temp_analysis_df['Fan (%)'] = np.interp(temp_analysis_df['누적 시간 (초)'], fan_df['누적 시간 (초)'].dropna(), fan_df['Fan (%)'].dropna()).round(1)
-                
                 temp_cols_order = ['온도', 'Fan (%)', '분', '초', '구간 시간 (초)', '누적 시간 (초)', 'ROR (℃/sec)']
-                st.data_editor(temp_analysis_df, column_order=temp_cols_order, hide_index=True, disabled=True, use_container_width=True)
+                st.data_editor(temp_analysis_df, column_order=temp_cols_order, hide_index=True, disabled=True, use_container_width=True, key=f"temp_analysis_table_{name}")
 
                 st.write("**팬 포인트**")
                 fan_analysis_df = fan_df.dropna(subset=['Fan (%)']).copy()
                 if not fan_analysis_df.empty and not temp_df.dropna(subset=['온도']).empty and len(temp_df.dropna(subset=['온도'])) > 1:
                     fan_analysis_df['온도'] = np.interp(fan_analysis_df['누적 시간 (초)'], temp_df['누적 시간 (초)'].dropna(), temp_df['온도'].dropna()).round(1)
                     fan_analysis_df['ROR (℃/sec)'] = np.interp(fan_analysis_df['누적 시간 (초)'], temp_df['누적 시간 (초)'].dropna(), temp_df['ROR (℃/sec)'].dropna()).round(3)
-                
                 fan_cols_order = ['온도', 'Fan (%)', '분', '초', '구간 시간 (초)', '누적 시간 (초)', 'ROR (℃/sec)']
-                st.data_editor(fan_analysis_df, column_order=fan_cols_order, hide_index=True, disabled=True, use_container_width=True)
+                st.data_editor(fan_analysis_df, column_order=fan_cols_order, hide_index=True, disabled=True, use_container_width=True, key=f"fan_analysis_table_{name}")
