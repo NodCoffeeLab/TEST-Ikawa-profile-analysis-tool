@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 # --- 백엔드 함수 ---
 def create_new_profile():
@@ -53,7 +54,6 @@ def sync_fan_data(df, primary_input_mode):
 def parse_excel_data(text_data, mode):
     # (이전과 동일)
     return pd.DataFrame()
-
 def calculate_ror(df):
     # (이전과 동일)
     return df
@@ -67,12 +67,22 @@ if 'profiles' not in st.session_state or not st.session_state.profiles:
 if 'fan_profiles' not in st.session_state:
     st.session_state.fan_profiles = {name: create_new_fan_profile() for name in st.session_state.profiles.keys()}
 if 'processed_profiles' not in st.session_state: st.session_state.processed_profiles = None
+if 'processed_fan_profiles' not in st.session_state: st.session_state.processed_fan_profiles = None
 if 'graph_button_enabled' not in st.session_state: st.session_state.graph_button_enabled = False
 if 'selected_time' not in st.session_state: st.session_state.selected_time = 0
 
 with st.sidebar:
     st.header("⚙️ 보기 옵션")
-    # (이하 사이드바 코드 생략)
+    profile_names_sidebar = list(st.session_state.profiles.keys())
+    default_selected = st.session_state.get('selected_profiles', profile_names_sidebar)
+    st.session_state.selected_profiles = st.multiselect("그래프에 표시할 프로파일 선택", options=profile_names_sidebar, default=default_selected)
+    st.subheader("축 범위 조절")
+    col1, col2 = st.columns(2)
+    with col1:
+        x_min = st.number_input("X축 최소값", value=0); y_min = st.number_input("Y축(온도) 최소값", value=85); y2_min = st.number_input("보조Y축(ROR) 최소값", value=0.0, format="%.2f")
+    with col2:
+        x_max = st.number_input("X축 최대값", value=360); y_max = st.number_input("Y축(온도) 최대값", value=235); y2_max = st.number_input("보조Y축(ROR) 최대값", value=0.75, format="%.2f")
+    st.session_state.axis_ranges = {'x': [x_min, x_max], 'y': [y_min, y_max], 'y2': [y2_min, y2_max]}
 
 st.subheader("프로파일 관리")
 if len(st.session_state.profiles) < 10:
@@ -103,51 +113,73 @@ for i, col in enumerate(cols):
                 new_fan_profiles = {new_name if name == current_name else name: df for name, df in st.session_state.fan_profiles.items()}
                 st.session_state.profiles, st.session_state.fan_profiles = new_profiles, new_fan_profiles; st.rerun()
         st.divider()
-        
         main_input_method = st.radio("입력 방식", ("시간 입력", "구간 입력"), key=f"main_input_{current_name}", horizontal=True)
         sub_input_method = st.radio("입력 방법", ("기본", "엑셀 데이터 붙여넣기"), key=f"sub_input_{current_name}", horizontal=True)
-
+        
         st.subheader("온도 데이터 입력")
         if main_input_method == "구간 입력" and sub_input_method == "기본":
              st.info("구간(초): 현재 포인트에서 다음 포인트까지 걸릴 시간")
-        
-        column_config = { "Point": st.column_config.NumberColumn("번호", disabled=True), "온도": st.column_config.NumberColumn("온도℃", format="%.1f"), "분": st.column_config.NumberColumn("분", disabled=(main_input_method == "구간 입력")), "초": st.column_config.NumberColumn("초", disabled=(main_input_method == "구간 입력")), "구간 시간 (초)": st.column_config.NumberColumn("구간(초)", disabled=(main_input_method == "시간 입력")), "누적 시간 (초)": st.column_config.NumberColumn("누적 시간(초)", disabled=True), "ROR (℃/sec)": st.column_config.NumberColumn("ROR", format="%.3f", disabled=True)}
+        column_config = { "Point": st.column_config.NumberColumn("번호", disabled=True), "온도": st.column_config.NumberColumn("온도℃", format="%.1f"), "분": st.column_config.NumberColumn("분"), "초": st.column_config.NumberColumn("초"), "구간 시간 (초)": st.column_config.NumberColumn("구간(초)"), "누적 시간 (초)": st.column_config.NumberColumn("누적 시간(초)", disabled=True), "ROR (℃/sec)": st.column_config.NumberColumn("ROR", format="%.3f", disabled=True)}
         default_visible_cols = ["Point", "온도"]
         if main_input_method == "시간 입력": default_visible_cols += ["분", "초"]
         else: default_visible_cols += ["구간 시간 (초)"]
-        
-        edited_df = st.session_state.profiles[current_name]
-        text_area_content = ""
-        if sub_input_method == "엑셀 데이터 붙여넣기":
-            placeholder = "120 0 0\n..." if main_input_method == "시간 입력" else "120 40\n..."
-            text_area_content = st.text_area("온도 데이터 붙여넣기", height=250, placeholder=placeholder, key=f"textarea_{current_name}", label_visibility="collapsed")
-        else:
-            df_editor_key = f"editor_{main_input_method}_{current_name}"
-            edited_df = st.data_editor(st.session_state.profiles[current_name], column_config=column_config, key=df_editor_key, hide_index=True, num_rows="dynamic", column_order=default_visible_cols)
-        
+        edited_df = st.data_editor(st.session_state.profiles[current_name], column_config=column_config, key=f"editor_{main_input_method}_{current_name}", hide_index=True, num_rows="dynamic", column_order=default_visible_cols)
         if st.button("🔄 온도 데이터 동기화", key=f"sync_button_{current_name}"):
-            profile_df_to_sync = None
-            if sub_input_method == "기본": profile_df_to_sync = edited_df
-            elif sub_input_method == "엑셀 데이터 붙여넣기" and text_area_content:
-                parsed_df = parse_excel_data(text_area_content, '시간 입력'); profile_df_to_sync = create_new_profile(); profile_df_to_sync.update(parsed_df)
-            if profile_df_to_sync is not None:
-                synced_df = sync_profile_data(profile_df_to_sync, main_input_method); st.session_state.profiles[current_name] = synced_df; st.session_state.graph_button_enabled = True; st.rerun()
+            synced_df = sync_profile_data(edited_df, main_input_method); st.session_state.profiles[current_name] = synced_df; st.session_state.graph_button_enabled = True; st.rerun()
 
         with st.expander("팬 데이터 입력 (선택 사항)"):
             fan_df = st.session_state.fan_profiles.get(current_name, create_new_fan_profile())
-            
             fan_column_config = {"Point": st.column_config.NumberColumn("번호", disabled=True), "Fan (%)": st.column_config.NumberColumn("팬(%)", min_value=0, max_value=100), "분": st.column_config.NumberColumn("분"), "초": st.column_config.NumberColumn("초"), "구간 시간 (초)": st.column_config.NumberColumn("구간(초)"), "누적 시간 (초)": st.column_config.NumberColumn("누적(초)", disabled=True)}
             fan_visible_cols = ["Point", "Fan (%)"]
             if main_input_method == "시간 입력": fan_visible_cols += ["분", "초"]
             else: fan_visible_cols += ["구간 시간 (초)"]
-
             fan_edited_df = st.data_editor(fan_df, column_config=fan_column_config, column_order=fan_visible_cols, num_rows="dynamic", key=f"fan_editor_{current_name}", hide_index=True)
-            
             if st.button("🔄 팬 데이터 동기화", key=f"fan_sync_button_{current_name}"):
-                synced_fan_df = sync_fan_data(fan_edited_df, main_input_method)
-                st.session_state.fan_profiles[current_name] = synced_fan_df
-                st.rerun()
+                synced_fan_df = sync_fan_data(fan_edited_df, main_input_method); st.session_state.fan_profiles[current_name] = synced_fan_df; st.session_state.graph_button_enabled = True; st.rerun()
 st.divider()
 
 st.header("📈 그래프 및 분석")
-# (이하 그래프 및 분석 패널 UI 생략)
+if st.button("📊 그래프 업데이트", disabled=not st.session_state.graph_button_enabled):
+    st.session_state.processed_profiles = {name: calculate_ror(df.copy()) for name, df in st.session_state.profiles.items()}
+    st.session_state.processed_fan_profiles = {name: df.copy() for name, df in st.session_state.fan_profiles.items()}
+    st.session_state.selected_time = 0
+
+if st.session_state.processed_profiles:
+    graph_col, analysis_col = st.columns([0.7, 0.3])
+    max_time_temp = max((df['누적 시간 (초)'].max() for df in st.session_state.processed_profiles.values() if not df['누적 시간 (초)'].dropna().empty), default=0)
+    max_time_fan = max((df['누적 시간 (초)'].max() for df in st.session_state.processed_fan_profiles.values() if not df['누적 시간 (초)'].dropna().empty), default=0)
+    max_time = max(max_time_temp, max_time_fan, 1)
+
+    with graph_col:
+        fig = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.7, 0.3], vertical_spacing=0.05)
+        selected_profiles_data = st.session_state.get('selected_profiles', [])
+        
+        for name in selected_profiles_data:
+            df = st.session_state.processed_profiles.get(name)
+            if df is not None:
+                valid_df = df.dropna(subset=['누적 시간 (초)', '온도']);
+                if len(valid_df) > 1:
+                    fig.add_trace(go.Scatter(x=valid_df['누적 시간 (초)'], y=valid_df['온도'], mode='lines+markers', name=name), row=1, col=1)
+                    ror_df = valid_df.iloc[1:]
+                    fig.add_trace(go.Scatter(x=ror_df['누적 시간 (초)'], y=ror_df['ROR (℃/sec)'], mode='lines', name=f'{name} ROR', line=dict(dash='dot'), yaxis='y2'), row=1, col=1)
+            fan_df = st.session_state.processed_fan_profiles.get(name)
+            if fan_df is not None:
+                valid_fan_df = fan_df.dropna(subset=['누적 시간 (초)', 'Fan (%)'])
+                if len(valid_fan_df) > 1:
+                    fig.add_trace(go.Scatter(x=valid_fan_df['누적 시간 (초)'], y=valid_fan_df['Fan (%)'], mode='lines+markers', name=f'{name} Fan', line=dict(dash='solid')), row=2, col=1)
+        
+        selected_time_int = int(st.session_state.get('selected_time', 0))
+        fig.add_vline(x=selected_time_int, line_width=1, line_dash="dash", line_color="grey")
+        
+        axis_ranges = st.session_state.get('axis_ranges', {'x': [0, 360], 'y': [85, 235], 'y2': [0, 0.75]})
+        fig.update_layout(height=900, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+        fig.update_xaxes(range=axis_ranges['x'], title_text=None, showticklabels=True, row=1, col=1)
+        fig.update_xaxes(range=axis_ranges['x'], title_text='시간 (초)', row=2, col=1)
+        fig.update_yaxes(title_text="온도 (°C)", range=axis_ranges['y'], row=1, col=1)
+        fig.update_yaxes(title_text="ROR (℃/sec)", range=axis_ranges['y2'], side='right', overlaying='y', secondary_y=True, row=1, col=1)
+        fig.update_yaxes(title_text="팬 (%)", range=[60, 100], row=2, col=1)
+        st.plotly_chart(fig, use_container_width=True)
+
+    with analysis_col:
+        st.subheader("🔍 분석 정보"); st.markdown("---")
+        # (이하 분석 패널 코드 생략)
