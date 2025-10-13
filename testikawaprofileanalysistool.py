@@ -3,8 +3,7 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 
-# --- 백엔드 함수 ---
-
+# --- 백엔드 함수 (변경 없음) ---
 def create_new_profile():
     points = list(range(21))
     data = {'Point': points, '온도': [np.nan]*len(points), '분': [np.nan]*len(points), '초': [np.nan]*len(points), '구간 시간 (초)': [np.nan]*len(points), '누적 시간 (초)': [np.nan]*len(points), 'ROR (℃/sec)': [np.nan]*len(points)}
@@ -25,13 +24,10 @@ def sync_profile_data(df, primary_input_mode):
         calc_df['누적 시간 (초)'] = np.concatenate(([0], cumulative_seconds[:-1].values))
         calc_df['분'] = (calc_df['누적 시간 (초)'] // 60).astype(int)
         calc_df['초'] = (calc_df['누적 시간 (초)'] % 60).astype(int)
-    
-    # --- 여기가 수정된 부분: 동기화 시 ROR도 함께 계산 ---
     delta_temp = calc_df['온도'].diff()
     delta_time = calc_df['누적 시간 (초)'].diff()
     ror = (delta_temp / delta_time).replace([np.inf, -np.inf], 0).fillna(0)
     calc_df['ROR (℃/sec)'] = ror
-
     df.update(calc_df)
     return df
 
@@ -54,7 +50,7 @@ def parse_excel_data(text_data, mode):
     if not new_data: return pd.DataFrame()
     return pd.DataFrame(new_data).set_index('Point')
 
-def calculate_ror(df): # 이 함수는 이제 그래프 업데이트 시 최종 확인용으로만 사용됩니다.
+def calculate_ror(df):
     if df['온도'].isnull().all(): return df
     last_valid_index = df['온도'].last_valid_index()
     if last_valid_index is None: return df
@@ -77,7 +73,6 @@ if 'graph_button_enabled' not in st.session_state: st.session_state.graph_button
 if 'selected_time' not in st.session_state: st.session_state.selected_time = 0
 
 st.subheader("프로파일 관리")
-# (프로파일 관리 UI 변경 없음)
 if len(st.session_state.profiles) < 10:
     if st.button("＋ 새 프로파일 추가"):
         existing_nums = [int(name.split(' ')[1]) for name in st.session_state.profiles.keys() if name.startswith("프로파일 ") and name.split(' ')[1].isdigit()]
@@ -92,7 +87,6 @@ cols = st.columns(len(profile_names))
 for i, col in enumerate(cols):
     current_name = profile_names[i]
     with col:
-        # (이름 변경 및 삭제 UI 변경 없음)
         col1, col2 = st.columns([0.8, 0.2]);
         with col1: new_name = st.text_input("프로파일 이름", value=current_name, key=f"name_input_{current_name}", label_visibility="collapsed")
         with col2:
@@ -109,7 +103,6 @@ for i, col in enumerate(cols):
         if main_input_method == "구간 입력" and sub_input_method == "기본":
              st.info("구간(초): 현재 포인트에서 다음 포인트까지 걸릴 시간")
         
-        # --- 여기가 수정된 부분: 모든 열에 대한 column_config를 미리 정의 ---
         column_config = {
             "Point": st.column_config.NumberColumn("번호", disabled=True),
             "온도": st.column_config.NumberColumn("온도℃", format="%.1f"),
@@ -120,7 +113,6 @@ for i, col in enumerate(cols):
             "ROR (℃/sec)": st.column_config.NumberColumn("ROR", format="%.3f", disabled=True),
         }
         
-        # 화면에 기본적으로 보일 열만 선택
         default_visible_cols = ["Point", "온도"]
         if main_input_method == "시간 입력": default_visible_cols += ["분", "초"]
         else: default_visible_cols += ["구간 시간 (초)"]
@@ -132,7 +124,6 @@ for i, col in enumerate(cols):
             text_area_content = st.text_area("엑셀 데이터 붙여넣기", height=250, placeholder=placeholder, key=f"textarea_{current_name}", label_visibility="collapsed")
         else:
             df_editor_key = f"editor_{main_input_method}_{current_name}"
-            # column_order를 사용해 기본적으로 보일 열을 지정
             edited_df = st.data_editor(st.session_state.profiles[current_name], column_config=column_config, key=df_editor_key, hide_index=True, num_rows="fixed", column_order=default_visible_cols)
         
         st.write("")
@@ -142,20 +133,15 @@ for i, col in enumerate(cols):
             elif sub_input_method == "엑셀 데이터 붙여넣기" and text_area_content:
                 parsed_df = parse_excel_data(text_area_content, main_input_method); profile_df_to_sync = create_new_profile(); profile_df_to_sync.update(parsed_df)
             if profile_df_to_sync is not None:
-                synced_df = sync_profile_data(profile_df_to_sync, main_input_method) # 이제 ROR도 여기서 계산됨
-                st.session_state.profiles[current_name] = synced_df
-                st.session_state.graph_button_enabled = True
-                st.rerun()
+                synced_df = sync_profile_data(profile_df_to_sync, main_input_method); st.session_state.profiles[current_name] = synced_df; st.session_state.graph_button_enabled = True; st.rerun()
 st.divider()
 
-# (그래프 및 분석 패널 UI 변경 없음)
 st.header("📈 그래프 및 분석")
 if st.button("📊 그래프 업데이트", disabled=not st.session_state.graph_button_enabled):
     st.session_state.processed_profiles = {name: calculate_ror(df.copy()) for name, df in st.session_state.profiles.items()}
     st.session_state.selected_time = 0
 
 if st.session_state.processed_profiles:
-    # (이하 코드 모두 이전과 동일)
     graph_col, analysis_col = st.columns([0.7, 0.3])
     all_dfs = st.session_state.processed_profiles.values()
     valid_dfs = [df for df in all_dfs if df['누적 시간 (초)'].notna().sum() > 1]
@@ -167,13 +153,18 @@ if st.session_state.processed_profiles:
             valid_df = df.dropna(subset=['누적 시간 (초)', '온도'])
             if len(valid_df) > 1:
                 fig.add_trace(go.Scatter(x=valid_df['누적 시간 (초)'], y=valid_df['온도'], mode='lines+markers', name=name, yaxis='y1'))
-                fig.add_trace(go.Scatter(x=valid_df['누적 시간 (초)'], y=valid_df['ROR (℃/sec)'], mode='lines', name=f'{name} ROR', yaxis='y2', line=dict(dash='dot')))
+                
+                # --- 여기가 수정된 부분: 0초 데이터를 제외하고 ROR 그래프를 그림 ---
+                ror_df = valid_df.iloc[1:]
+                fig.add_trace(go.Scatter(x=ror_df['누적 시간 (초)'], y=ror_df['ROR (℃/sec)'], mode='lines', name=f'{name} ROR', yaxis='y2', line=dict(dash='dot')))
+        
         selected_time_int = int(st.session_state.get('selected_time', 0))
         fig.add_vline(x=selected_time_int, line_width=1, line_dash="dash", line_color="grey")
         fig.update_layout(height=900, xaxis_title='시간 (초)', yaxis_title='온도 (°C)', yaxis=dict(range=[85, 235]), yaxis2=dict(title='ROR (℃/sec)', overlaying='y', side='right', range=[0, 0.75]), xaxis=dict(range=[0, 360]), legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
         st.plotly_chart(fig, use_container_width=True)
 
     with analysis_col:
+        # (분석 패널 UI 변경 없음)
         st.subheader("🔍 분석 정보"); st.markdown("---")
         st.write("**총 로스팅 시간**")
         for name, df in st.session_state.processed_profiles.items():
