@@ -65,7 +65,7 @@ def calculate_ror(df):
 # --- UI 및 앱 실행 로직 ---
 st.set_page_config(layout="wide")
 st.title('☕ Ikawa Profile Analysis Tool')
-st.markdown("**(v.1.0)**")
+st.markdown("**(v.1.0 2025.10.13)**")
 
 if 'profiles' not in st.session_state or not st.session_state.profiles:
     st.session_state.profiles = {'프로파일 1': create_new_profile(), '프로파일 2': create_new_profile(), '프로파일 3': create_new_profile()}
@@ -175,7 +175,7 @@ if st.session_state.processed_profiles:
         fig.update_xaxes(range=axis_ranges['x'], title_text='시간 (초)', row=2, col=1)
         fig.update_yaxes(title_text="온도 (°C)", range=axis_ranges['y'], row=1, col=1, secondary_y=False)
         fig.update_yaxes(title_text="ROR (℃/sec)", range=axis_ranges['y2'], row=1, col=1, secondary_y=True)
-        fig.update_yaxes(title_text="팬 (%)", range=[60, 90], row=2, col=1)
+        fig.update_yaxes(title_text="팬 (%)", range=[60, 100], row=2, col=1)
         st.plotly_chart(fig, use_container_width=True)
     with analysis_col:
         st.subheader("🔍 분석 정보"); st.markdown("---")
@@ -195,7 +195,7 @@ if st.session_state.processed_profiles:
         st.write(""); st.write("**선택된 시간 상세 정보**")
         selected_time = st.session_state.selected_time; st.markdown(f"#### {int(selected_time // 60)}분 {int(selected_time % 60):02d}초 ({selected_time}초)")
         for name in selected_profiles_data:
-            st.markdown(f"**{name}**")
+            st.markdown(f"<p style='margin-bottom: 0.2em;'><strong>{name}</strong></p>", unsafe_allow_html=True)
             temp_str, ror_str, fan_str = "--", "--", "--"
             df = st.session_state.processed_profiles.get(name)
             if df is not None:
@@ -208,9 +208,9 @@ if st.session_state.processed_profiles:
                 valid_fan_df = fan_df.dropna(subset=['누적 시간 (초)', 'Fan (%)'])
                 if len(valid_fan_df) > 1 and selected_time <= valid_fan_df['누적 시간 (초)'].max():
                     hover_fan = np.interp(selected_time, valid_fan_df['누적 시간 (초)'], valid_fan_df['Fan (%)']); fan_str = f"{hover_fan:.1f}%"
-            st.markdown(f"<p style='margin-bottom:0; margin-top:0.5em; font-size: 0.95em;'>&nbsp;&nbsp;• 온도: {temp_str}</p>", unsafe_allow_html=True)
-            st.markdown(f"<p style='margin-bottom:0; margin-top:0; font-size: 0.95em;'>&nbsp;&nbsp;• ROR: {ror_str}</p>", unsafe_allow_html=True)
-            st.markdown(f"<p style='margin-bottom:0.8em; margin-top:0; font-size: 0.95em;'>&nbsp;&nbsp;• 팬: {fan_str}</p>", unsafe_allow_html=True)
+            st.markdown(f"<p style='margin:0; font-size: 0.95em;'>&nbsp;&nbsp;• 온도: {temp_str}</p>", unsafe_allow_html=True)
+            st.markdown(f"<p style='margin:0; font-size: 0.95em;'>&nbsp;&nbsp;• ROR: {ror_str}</p>", unsafe_allow_html=True)
+            st.markdown(f"<p style='margin-bottom:0.8em; font-size: 0.95em;'>&nbsp;&nbsp;• 팬: {fan_str}</p>", unsafe_allow_html=True)
 
     with st.expander("🕒 통합 분석 테이블 보기"):
         selected_profiles_data = st.session_state.get('selected_profiles', [])
