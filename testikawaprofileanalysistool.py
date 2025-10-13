@@ -175,7 +175,7 @@ if st.session_state.processed_profiles:
         fig.update_xaxes(range=axis_ranges['x'], title_text='시간 (초)', row=2, col=1)
         fig.update_yaxes(title_text="온도 (°C)", range=axis_ranges['y'], row=1, col=1, secondary_y=False)
         fig.update_yaxes(title_text="ROR (℃/sec)", range=axis_ranges['y2'], row=1, col=1, secondary_y=True)
-        fig.update_yaxes(title_text="팬 (%)", range=[60, 100], row=2, col=1)
+        fig.update_yaxes(title_text="팬 (%)", range=[60, 90], row=2, col=1)
         st.plotly_chart(fig, use_container_width=True)
     with analysis_col:
         st.subheader("🔍 분석 정보"); st.markdown("---")
