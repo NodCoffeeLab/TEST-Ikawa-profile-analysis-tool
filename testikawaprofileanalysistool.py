@@ -12,14 +12,10 @@ def create_new_profile():
     return df
 
 def sync_profile_data(df, primary_input_mode):
-    # 'Point' 열을 실제 행 순서에 맞게 재설정
-    df = df.reset_index(drop=True)
-    df['Point'] = df.index
-
+    df = df.reset_index(drop=True); df['Point'] = df.index
     if df['온도'].isnull().all(): return df
     last_valid_index = df['온도'].last_valid_index()
     if last_valid_index is None: return df
-    
     calc_df = df.loc[0:last_valid_index].copy()
     if primary_input_mode == '시간 입력':
         calc_df['누적 시간 (초)'] = calc_df['분'].fillna(0) * 60 + calc_df['초'].fillna(0)
@@ -29,7 +25,6 @@ def sync_profile_data(df, primary_input_mode):
         calc_df['누적 시간 (초)'] = np.concatenate(([0], cumulative_seconds[:-1].values))
         calc_df['분'] = (calc_df['누적 시간 (초)'] // 60).astype(int)
         calc_df['초'] = (calc_df['누적 시간 (초)'] % 60).astype(int)
-    
     delta_temp = calc_df['온도'].diff()
     delta_time = calc_df['누적 시간 (초)'].diff()
     ror = (delta_temp / delta_time).replace([np.inf, -np.inf], 0).fillna(0)
@@ -46,11 +41,9 @@ def parse_excel_data(text_data, mode):
             if mode == '시간 입력':
                 if len(parts) >= 3: row['온도'], row['분'], row['초'] = float(parts[0]), int(parts[1]), int(parts[2])
                 elif len(parts) >= 1: row['온도'], row['분'], row['초'] = float(parts[0]), 0, 0
-                else: continue
             elif mode == '구간 입력':
                 if len(parts) >= 2: row['온도'], row['구간 시간 (초)'] = float(parts[0]), int(parts[1])
                 elif len(parts) >= 1: row['온도'], row['구간 시간 (초)'] = float(parts[0]), np.nan
-                else: continue
             new_data.append(row)
         except (ValueError, IndexError): continue
     if not new_data: return pd.DataFrame()
@@ -72,12 +65,45 @@ def calculate_ror(df):
 st.set_page_config(layout="wide")
 st.title('☕ Ikawa Profile Analysis Tool (25.10.08)')
 
+# --- Session State 초기화 ---
 if 'profiles' not in st.session_state or not st.session_state.profiles:
     st.session_state.profiles = {'프로파일 1': create_new_profile(), '프로파일 2': create_new_profile(), '프로파일 3': create_new_profile()}
 if 'processed_profiles' not in st.session_state: st.session_state.processed_profiles = None
 if 'graph_button_enabled' not in st.session_state: st.session_state.graph_button_enabled = False
 if 'selected_time' not in st.session_state: st.session_state.selected_time = 0
 
+# --- 사이드바 UI ---
+with st.sidebar:
+    st.header("⚙️ 보기 옵션")
+    
+    # 프로파일 선택 UI
+    if st.session_state.processed_profiles:
+        profile_names = list(st.session_state.processed_profiles.keys())
+        st.session_state.selected_profiles = st.multiselect(
+            "그래프에 표시할 프로파일 선택",
+            options=profile_names,
+            default=profile_names
+        )
+    
+    # 축 범위 조절 UI
+    st.subheader("축 범위 조절")
+    col1, col2 = st.columns(2)
+    with col1:
+        x_min = st.number_input("X축 최소값", value=0)
+        y_min = st.number_input("Y축(온도) 최소값", value=85)
+        y2_min = st.number_input("보조Y축(ROR) 최소값", value=0.0, format="%.2f")
+    with col2:
+        x_max = st.number_input("X축 최대값", value=360)
+        y_max = st.number_input("Y축(온도) 최대값", value=235)
+        y2_max = st.number_input("보조Y축(ROR) 최대값", value=0.75, format="%.2f")
+    
+    st.session_state.axis_ranges = {
+        'x': [x_min, x_max],
+        'y': [y_min, y_max],
+        'y2': [y2_min, y2_max]
+    }
+
+# --- 메인 화면 UI ---
 st.subheader("프로파일 관리")
 if len(st.session_state.profiles) < 10:
     if st.button("＋ 새 프로파일 추가"):
@@ -93,6 +119,7 @@ cols = st.columns(len(profile_names))
 for i, col in enumerate(cols):
     current_name = profile_names[i]
     with col:
+        # (데이터 입력 UI 로직: 이전과 동일)
         col1, col2 = st.columns([0.8, 0.2]);
         with col1: new_name = st.text_input("프로파일 이름", value=current_name, key=f"name_input_{current_name}", label_visibility="collapsed")
         with col2:
@@ -130,7 +157,6 @@ for i, col in enumerate(cols):
             text_area_content = st.text_area("엑셀 데이터 붙여넣기", height=250, placeholder=placeholder, key=f"textarea_{current_name}", label_visibility="collapsed")
         else:
             df_editor_key = f"editor_{main_input_method}_{current_name}"
-            # --- 여기가 수정된 부분: num_rows를 "dynamic"으로 변경 ---
             edited_df = st.data_editor(st.session_state.profiles[current_name], column_config=column_config, key=df_editor_key, hide_index=True, num_rows="dynamic", column_order=default_visible_cols)
         
         st.write("")
@@ -143,7 +169,6 @@ for i, col in enumerate(cols):
                 synced_df = sync_profile_data(profile_df_to_sync, main_input_method); st.session_state.profiles[current_name] = synced_df; st.session_state.graph_button_enabled = True; st.rerun()
 st.divider()
 
-# (그래프 및 분석 패널 UI 변경 없음)
 st.header("📈 그래프 및 분석")
 if st.button("📊 그래프 업데이트", disabled=not st.session_state.graph_button_enabled):
     st.session_state.processed_profiles = {name: calculate_ror(df.copy()) for name, df in st.session_state.profiles.items()}
@@ -157,19 +182,32 @@ if st.session_state.processed_profiles:
 
     with graph_col:
         fig = go.Figure()
-        for name, df in st.session_state.processed_profiles.items():
-            valid_df = df.dropna(subset=['누적 시간 (초)', '온도'])
-            if len(valid_df) > 1:
-                fig.add_trace(go.Scatter(x=valid_df['누적 시간 (초)'], y=valid_df['온도'], mode='lines+markers', name=name, yaxis='y1'))
-                ror_df = valid_df.iloc[1:]
-                fig.add_trace(go.Scatter(x=ror_df['누적 시간 (초)'], y=ror_df['ROR (℃/sec)'], mode='lines', name=f'{name} ROR', yaxis='y2', line=dict(dash='dot')))
+        # 사이드바에서 선택된 프로파일만 그래프에 추가
+        selected_profiles_data = st.session_state.get('selected_profiles', [])
+        for name in selected_profiles_data:
+            df = st.session_state.processed_profiles.get(name)
+            if df is not None:
+                valid_df = df.dropna(subset=['누적 시간 (초)', '온도'])
+                if len(valid_df) > 1:
+                    fig.add_trace(go.Scatter(x=valid_df['누적 시간 (초)'], y=valid_df['온도'], mode='lines+markers', name=name, yaxis='y1'))
+                    ror_df = valid_df.iloc[1:]
+                    fig.add_trace(go.Scatter(x=ror_df['누적 시간 (초)'], y=ror_df['ROR (℃/sec)'], mode='lines', name=f'{name} ROR', yaxis='y2', line=dict(dash='dot')))
+        
         selected_time_int = int(st.session_state.get('selected_time', 0))
         fig.add_vline(x=selected_time_int, line_width=1, line_dash="dash", line_color="grey")
-        fig.update_layout(height=900, xaxis_title='시간 (초)', yaxis_title='온도 (°C)', yaxis=dict(range=[85, 235]), yaxis2=dict(title='ROR (℃/sec)', overlaying='y', side='right', range=[0, 0.75]), xaxis=dict(range=[0, 360]), legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+        
+        # 사이드바에서 설정한 축 범위 적용
+        axis_ranges = st.session_state.get('axis_ranges', {'x': [0, 360], 'y': [85, 235], 'y2': [0, 0.75]})
+        fig.update_layout(height=900, xaxis_title='시간 (초)', yaxis_title='온도 (°C)', 
+                          yaxis=dict(range=axis_ranges['y']), 
+                          yaxis2=dict(title='ROR (℃/sec)', overlaying='y', side='right', range=axis_ranges['y2']), 
+                          xaxis=dict(range=axis_ranges['x']), 
+                          legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
         st.plotly_chart(fig, use_container_width=True)
 
     with analysis_col:
         st.subheader("🔍 분석 정보"); st.markdown("---")
+        # (이하 분석 패널 코드 변경 없음)
         st.write("**총 로스팅 시간**")
         for name, df in st.session_state.processed_profiles.items():
             valid_df = df.dropna(subset=['누적 시간 (초)'])
