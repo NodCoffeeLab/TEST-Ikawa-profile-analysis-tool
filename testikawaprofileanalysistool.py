@@ -5,7 +5,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import plotly.express as px
 
-# --- 백엔드 함수 ---
+# --- 백엔드 함수 (변경 없음) ---
 def create_new_profile():
     points = list(range(21)); data = {'Point': points, '온도': [np.nan]*len(points), '분': [np.nan]*len(points), '초': [np.nan]*len(points), '구간 시간 (초)': [np.nan]*len(points), '누적 시간 (초)': [np.nan]*len(points), 'ROR (℃/sec)': [np.nan]*len(points)}
     df = pd.DataFrame(data); df.loc[0, ['분', '초', '누적 시간 (초)']] = 0
@@ -79,8 +79,13 @@ if 'selected_time' not in st.session_state: st.session_state.selected_time = 0
 with st.sidebar:
     st.header("⚙️ 보기 옵션")
     profile_names_sidebar = list(st.session_state.profiles.keys())
+    # 처음에는 모든 프로파일을 기본값으로 하되, 사용자가 선택한 값이 있으면 그것을 유지
     default_selected = st.session_state.get('selected_profiles', profile_names_sidebar)
+    # 만약 저장된 선택값이 현재 프로파일 목록에 없는 경우 (예: 프로파일 삭제 후) 동기화
+    default_selected = [p for p in default_selected if p in profile_names_sidebar]
+    
     st.session_state.selected_profiles = st.multiselect("그래프에 표시할 프로파일 선택", options=profile_names_sidebar, default=default_selected)
+    
     st.subheader("축 범위 조절")
     col1, col2 = st.columns(2)
     with col1:
@@ -103,6 +108,7 @@ cols = st.columns(len(profile_names))
 for i, col in enumerate(cols):
     current_name = profile_names[i]
     with col:
+        # (이하 데이터 입력 UI 코드는 이전과 동일)
         col1, col2 = st.columns([0.8, 0.2]);
         with col1: new_name = st.text_input("프로파일 이름", value=current_name, key=f"name_input_{current_name}", label_visibility="collapsed")
         with col2:
@@ -141,10 +147,18 @@ for i, col in enumerate(cols):
 st.divider()
 
 st.header("📈 그래프 및 분석")
+# --- 여기가 수정된 부분 ---
 if st.button("📊 그래프 업데이트", disabled=not st.session_state.graph_button_enabled):
+    # 데이터가 있는 프로파일만 자동으로 선택하도록 session_state 업데이트
+    profiles_with_data = [name for name, df in st.session_state.profiles.items() if not df['온도'].dropna().empty]
+    if profiles_with_data:
+        st.session_state.selected_profiles = profiles_with_data
+    
     st.session_state.processed_profiles = {name: calculate_ror(df.copy()) for name, df in st.session_state.profiles.items()}
     st.session_state.processed_fan_profiles = {name: df.copy() for name, df in st.session_state.fan_profiles.items()}
     st.session_state.selected_time = 0
+    st.rerun() # 선택된 프로파일을 사이드바에 즉시 반영하기 위해 한번 더 실행
+
 if st.session_state.processed_profiles:
     graph_col, analysis_col = st.columns([0.7, 0.3])
     max_time_temp = max((df['누적 시간 (초)'].max() for df in st.session_state.processed_profiles.values() if not df['누적 시간 (초)'].dropna().empty), default=0)
