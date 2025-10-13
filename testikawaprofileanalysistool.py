@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+import plotly.express as px # 색상 목록을 위해 추가
 
 # --- 백엔드 함수 ---
 def create_new_profile():
@@ -50,23 +51,6 @@ def sync_fan_data(df, primary_input_mode):
         calc_df['초'] = (calc_df['누적 시간 (초)'] % 60).astype(int)
     df.update(calc_df)
     return df
-
-def parse_excel_data(text_data, mode):
-    new_data = []; lines = text_data.strip().split('\n')
-    for i, line in enumerate(lines):
-        if not line.strip(): continue
-        parts = line.strip().split(); row = {'Point': i}
-        try:
-            if mode == '시간 입력':
-                if len(parts) >= 3: row['온도'], row['분'], row['초'] = float(parts[0]), int(parts[1]), int(parts[2])
-                elif len(parts) >= 1: row['온도'], row['분'], row['초'] = float(parts[0]), 0, 0
-            elif mode == '구간 입력':
-                if len(parts) >= 2: row['온도'], row['구간 시간 (초)'] = float(parts[0]), int(parts[1])
-                elif len(parts) >= 1: row['온도'], row['구간 시간 (초)'] = float(parts[0]), np.nan
-            new_data.append(row)
-        except (ValueError, IndexError): continue
-    if not new_data: return pd.DataFrame()
-    return pd.DataFrame(new_data).set_index('Point')
 
 def calculate_ror(df):
     if df['온도'].isnull().all(): return df
@@ -175,25 +159,26 @@ if st.session_state.processed_profiles:
                             specs=[[{"secondary_y": True}], [{"secondary_y": False}]])
         
         selected_profiles_data = st.session_state.get('selected_profiles', [])
-        colors = st.get_option("theme.backgroundColor") # Plotly의 기본 색상 순서
         
+        # --- 여기가 수정된 부분 ---
+        colors = px.colors.qualitative.Plotly # Plotly의 기본 색상 목록 사용
         color_map = {name: colors[i % len(colors)] for i, name in enumerate(profile_names)}
 
         for name in selected_profiles_data:
             df = st.session_state.processed_profiles.get(name)
             color = color_map.get(name)
-            if df is not None:
+            if df is not None and color is not None:
                 valid_df = df.dropna(subset=['누적 시간 (초)', '온도']);
                 if len(valid_df) > 1:
-                    fig.add_trace(go.Scatter(x=valid_df['누적 시간 (초)'], y=valid_df['온도'], mode='lines+markers', name=name, line=dict(color=color)), row=1, col=1)
+                    fig.add_trace(go.Scatter(x=valid_df['누적 시간 (초)'], y=valid_df['온도'], mode='lines+markers', name=name, line=dict(color=color), legendgroup=name), row=1, col=1, secondary_y=False)
                     ror_df = valid_df.iloc[1:]
-                    fig.add_trace(go.Scatter(x=ror_df['누적 시간 (초)'], y=ror_df['ROR (℃/sec)'], mode='lines', name=f'{name} ROR', line=dict(color=color, dash='dot')), secondary_y=True, row=1, col=1)
+                    fig.add_trace(go.Scatter(x=ror_df['누적 시간 (초)'], y=ror_df['ROR (℃/sec)'], mode='lines', name=f'{name} ROR', line=dict(color=color, dash='dot'), legendgroup=name, showlegend=False), row=1, col=1, secondary_y=True)
             
             fan_df = st.session_state.processed_fan_profiles.get(name)
-            if fan_df is not None:
+            if fan_df is not None and color is not None:
                 valid_fan_df = fan_df.dropna(subset=['누적 시간 (초)', 'Fan (%)'])
                 if len(valid_fan_df) > 1:
-                    fig.add_trace(go.Scatter(x=valid_fan_df['누적 시간 (초)'], y=valid_fan_df['Fan (%)'], mode='lines+markers', name=f'{name} Fan', line=dict(color=color, dash='solid')), row=2, col=1)
+                    fig.add_trace(go.Scatter(x=valid_fan_df['누적 시간 (초)'], y=valid_fan_df['Fan (%)'], mode='lines+markers', name=f'{name} Fan', line=dict(color=color, dash='solid'), legendgroup=name, showlegend=False), row=2, col=1)
         
         selected_time_int = int(st.session_state.get('selected_time', 0))
         fig.add_vline(x=selected_time_int, line_width=1, line_dash="dash", line_color="grey")
