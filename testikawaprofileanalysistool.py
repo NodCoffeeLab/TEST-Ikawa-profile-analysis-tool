@@ -207,9 +207,9 @@ if st.session_state.processed_profiles:
                 valid_fan_df = fan_df.dropna(subset=['누적 시간 (초)', 'Fan (%)'])
                 if len(valid_fan_df) > 1 and selected_time <= valid_fan_df['누적 시간 (초)'].max():
                     hover_fan = np.interp(selected_time, valid_fan_df['누적 시간 (초)'], valid_fan_df['Fan (%)']); fan_str = f"{hover_fan:.1f}%"
-            st.markdown(f"<p style='margin-bottom:0; margin-top:-0.8; font-size: 0.9em;'>&nbsp;&nbsp;• 온도: {temp_str}</p>", unsafe_allow_html=True)
+            st.markdown(f"<p style='margin-bottom:0; margin-top:-1.5; font-size: 0.9em;'>&nbsp;&nbsp;• 온도: {temp_str}</p>", unsafe_allow_html=True)
             st.markdown(f"<p style='margin-bottom:0; margin-top:0; font-size: 0.9em;'>&nbsp;&nbsp;• ROR: {ror_str}</p>", unsafe_allow_html=True)
-            st.markdown(f"<p style='margin-bottom:1.0em; margin-top:0; font-size: 0.9em;'>&nbsp;&nbsp;• 팬: {fan_str}</p>", unsafe_allow_html=True)
+            st.markdown(f"<p style='margin-bottom:1.5em; margin-top:0; font-size: 0.9em;'>&nbsp;&nbsp;• 팬: {fan_str}</p>", unsafe_allow_html=True)
 
     with st.expander("🕒 통합 분석 테이블 보기"):
         for name in selected_profiles_data:
