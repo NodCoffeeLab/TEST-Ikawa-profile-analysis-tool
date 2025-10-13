@@ -103,6 +103,7 @@ cols = st.columns(len(profile_names))
 for i, col in enumerate(cols):
     current_name = profile_names[i]
     with col:
+        # (이하 데이터 입력 UI 코드는 이전과 동일)
         col1, col2 = st.columns([0.8, 0.2]);
         with col1: new_name = st.text_input("프로파일 이름", value=current_name, key=f"name_input_{current_name}", label_visibility="collapsed")
         with col2:
@@ -171,10 +172,10 @@ if st.session_state.processed_profiles:
         selected_time_int = int(st.session_state.get('selected_time', 0)); fig.add_vline(x=selected_time_int, line_width=1, line_dash="dash", line_color="grey")
         axis_ranges = st.session_state.get('axis_ranges', {'x': [0, 360], 'y': [85, 235], 'y2': [0, 0.75]})
         fig.update_layout(height=900, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
-        fig.update_xaxes(range=axis_ranges['x'], title_text=None, showticklabels=False, row=1, col=1)
-        fig.update_xaxes(range=axis_ranges['x'], title_text='시간 (초)', row=2, col=1)
-        fig.update_yaxes(title_text="온도 (°C)", range=axis_ranges['y'], row=1, col=1, secondary_y=False)
-        fig.update_yaxes(title_text="ROR (℃/sec)", range=axis_ranges['y2'], row=1, col=1, secondary_y=True)
+        fig.update_xaxes(range=axis_ranges['x'], title_text=None, showticklabels=False, dtick=60, row=1, col=1)
+        fig.update_xaxes(range=axis_ranges['x'], title_text='시간 (초)', dtick=60, row=2, col=1)
+        fig.update_yaxes(title_text="온도 (°C)", range=axis_ranges['y'], dtick=10, row=1, col=1, secondary_y=False)
+        fig.update_yaxes(title_text="ROR (℃/sec)", range=axis_ranges['y2'], showgrid=False, row=1, col=1, secondary_y=True)
         fig.update_yaxes(title_text="팬 (%)", range=[60, 90], row=2, col=1)
         st.plotly_chart(fig, use_container_width=True)
     with analysis_col:
@@ -212,25 +213,26 @@ if st.session_state.processed_profiles:
             st.markdown(f"<p style='margin:0; font-size: 0.95em;'>&nbsp;&nbsp;• ROR: {ror_str}</p>", unsafe_allow_html=True)
             st.markdown(f"<p style='margin-bottom:0.8em; font-size: 0.95em;'>&nbsp;&nbsp;• 팬: {fan_str}</p>", unsafe_allow_html=True)
 
-    with st.expander("🕒 통합 분석 테이블 보기"):
+    with st.expander("🕒 포인트별 분석 보기"):
         selected_profiles_data = st.session_state.get('selected_profiles', [])
         for name in selected_profiles_data:
             st.subheader(f"{name} 포인트별 분석")
             temp_df = st.session_state.processed_profiles.get(name)
             fan_df = st.session_state.processed_fan_profiles.get(name)
-
             if temp_df is not None and fan_df is not None:
-                # 온도 기준 테이블
                 st.write("**온도 포인트**")
                 temp_analysis_df = temp_df.dropna(subset=['온도']).copy()
                 if not temp_analysis_df.empty and not fan_df.dropna(subset=['Fan (%)']).empty and len(fan_df.dropna(subset=['Fan (%)'])) > 1:
                     temp_analysis_df['Fan (%)'] = np.interp(temp_analysis_df['누적 시간 (초)'], fan_df['누적 시간 (초)'].dropna(), fan_df['Fan (%)'].dropna()).round(1)
-                st.dataframe(temp_analysis_df, use_container_width=True)
+                
+                temp_cols_order = ['온도', 'Fan (%)', '분', '초', '구간 시간 (초)', '누적 시간 (초)', 'ROR (℃/sec)']
+                st.data_editor(temp_analysis_df, column_order=temp_cols_order, hide_index=True, disabled=True, use_container_width=True)
 
-                # 팬 기준 테이블
                 st.write("**팬 포인트**")
                 fan_analysis_df = fan_df.dropna(subset=['Fan (%)']).copy()
                 if not fan_analysis_df.empty and not temp_df.dropna(subset=['온도']).empty and len(temp_df.dropna(subset=['온도'])) > 1:
                     fan_analysis_df['온도'] = np.interp(fan_analysis_df['누적 시간 (초)'], temp_df['누적 시간 (초)'].dropna(), temp_df['온도'].dropna()).round(1)
                     fan_analysis_df['ROR (℃/sec)'] = np.interp(fan_analysis_df['누적 시간 (초)'], temp_df['누적 시간 (초)'].dropna(), temp_df['ROR (℃/sec)'].dropna()).round(3)
-                st.dataframe(fan_analysis_df, use_container_width=True)
+                
+                fan_cols_order = ['온도', 'Fan (%)', '분', '초', '구간 시간 (초)', '누적 시간 (초)', 'ROR (℃/sec)']
+                st.data_editor(fan_analysis_df, column_order=fan_cols_order, hide_index=True, disabled=True, use_container_width=True)
